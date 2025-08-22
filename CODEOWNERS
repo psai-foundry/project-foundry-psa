@@ -2,23 +2,23 @@
 # Code Owners for Project Foundry PSA
 
 # Global ownership - CTO review required for all changes
-* @your-username
+* @psai-foundry
 
 # Database schema and migrations require special attention
-app/prisma/ @your-username
-scripts/ @your-username
+app/prisma/ @psai-foundry
+scripts/ @psai-foundry
 
 # Critical application components
-app/components/ @your-username
-app/pages/api/ @your-username
-app/lib/ @your-username
+app/components/ @psai-foundry
+app/pages/api/ @psai-foundry
+app/lib/ @psai-foundry
 
 # Configuration files
-*.env* @your-username
-*.json @your-username
-*.yml @your-username
-*.yaml @your-username
+*.env* @psai-foundry
+*.json @psai-foundry
+*.yml @psai-foundry
+*.yaml @psai-foundry
 
 # Documentation and specifications
-*.md @your-username
-*.pdf @your-username
+*.md @psai-foundry
+*.pdf @psai-foundry
