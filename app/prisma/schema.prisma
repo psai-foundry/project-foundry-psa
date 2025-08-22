@@ -1,0 +1,1493 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/project-foundry-psa/app/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       String                    @id @default(cuid())
+  email                    String                    @unique
+  name                     String?
+  password                 String?
+  role                     UserRole                  @default(EMPLOYEE)
+  department               String?
+  hourlyRate               Float?
+  defaultBillRate          Float?
+  isActive                 Boolean                   @default(true)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  accounts                 Account[]
+  sessions                 Session[]
+  approvals                Approval[]
+  auditLogs                AuditLog[]
+  notification_preferences notification_preferences?
+  notifications            notifications[]
+  portfolios               Portfolio[]
+  programs                 Program[]
+  projectAssignments       ProjectAssignment[]
+  reportExecutions         ReportExecution[]
+  reports                  Report[]
+  timeEntries              TimeEntry[]
+  timePatterns             TimePattern[]
+  timeTemplates            TimeTemplate[]
+  approvedTimesheets       TimesheetSubmission[]     @relation("ApprovalRelation")
+  submittedTimesheets      TimesheetSubmission[]
+  voiceEntries             VoiceEntry[]
+  
+  // Validation Override Relations
+  createdValidationOverrides XeroValidationOverride[] @relation("ValidationOverrideCreatedBy")
+  approvedValidationOverrides XeroValidationOverride[] @relation("ValidationOverrideApprovedBy")
+  revokedValidationOverrides XeroValidationOverride[] @relation("ValidationOverrideRevokedBy")
+  extendedValidationOverrides XeroValidationOverride[] @relation("ValidationOverrideExtendedBy")
+  
+  // Metrics and Monitoring Relations
+  alertRules              AlertRule[]
+  
+  // Resource Management Relations
+  bugReports              BugReport[]
+  bugComments             BugComment[]
+  featureRequests         FeatureRequest[]
+  featureComments         FeatureComment[]
+  featureVotes            FeatureVote[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Client {
+  id          String          @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  address     String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  description String?
+  industry    String?
+  website     String?
+  contacts    ClientContact[]
+  projects    Project[]
+
+  @@map("clients")
+}
+
+model ClientContact {
+  id        String   @id @default(cuid())
+  clientId  String
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  role      String?
+  isPrimary Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  client    Client   @relation(fields: [clientId], references: [id])
+
+  @@map("client_contacts")
+}
+
+model Project {
+  id              String              @id @default(cuid())
+  name            String
+  code            String              @unique
+  description     String?
+  clientId        String
+  portfolioId     String?
+  programId       String?
+  status          ProjectStatus       @default(ACTIVE)
+  budget          Float?
+  startDate       DateTime?
+  endDate         DateTime?
+  billable        Boolean             @default(true)
+  defaultBillRate Float?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  assignments     ProjectAssignment[]
+  client          Client              @relation(fields: [clientId], references: [id])
+  portfolio       Portfolio?          @relation(fields: [portfolioId], references: [id])
+  program         Program?            @relation(fields: [programId], references: [id])
+  tasks           Task[]
+  timeEntries     TimeEntry[]
+  timePatterns    TimePattern[]
+  timeTemplates   TimeTemplate[]
+  
+  // Resource Management Relations
+  itSponsor              Sponsor?                      @relation("ITSponsorRelation", fields: [itSponsorId], references: [id])
+  itSponsorId            String?
+  businessFunction       String?
+  worldRegion            String?
+  countryList            String[]                      @default([])
+  comments               String?                       @db.Text
+  estimatedEffort        Float?
+  actualEffort           Float?
+  priority               PriorityLevel                 @default(MEDIUM)
+  riskLevel              RiskLevel                     @default(LOW)
+  projectBusinessSponsors ProjectBusinessSponsor[]
+  resourceAllocations    ResourceAllocation[]
+  capacityAllocations    CapacityAllocation[]
+  projectResourceAllocations ProjectResourceAllocation[]
+
+  @@map("projects")
+}
+
+model Task {
+  id             String         @id @default(cuid())
+  name           String
+  description    String?
+  projectId      String
+  status         TaskStatus     @default(OPEN)
+  estimatedHours Float?
+  billable       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  project        Project        @relation(fields: [projectId], references: [id])
+  timeEntries    TimeEntry[]
+  timePatterns   TimePattern[]
+  timeTemplates  TimeTemplate[]
+
+  @@map("tasks")
+}
+
+model ProjectAssignment {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  role      String?
+  billRate  Float?
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, projectId])
+  @@map("project_assignments")
+}
+
+model TimeEntry {
+  id              String                     @id @default(cuid())
+  userId          String
+  projectId       String
+  taskId          String?
+  date            DateTime                   @db.Date
+  startTime       DateTime?
+  endTime         DateTime?
+  duration        Float
+  description     String?
+  billable        Boolean                    @default(true)
+  billRate        Float?
+  status          TimeEntryStatus            @default(DRAFT)
+  isRunning       Boolean                    @default(false)
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  aiSuggested     Boolean                    @default(false)
+  aiCategory      String?
+  aiConfidence    Float?
+  project         Project                    @relation(fields: [projectId], references: [id])
+  task            Task?                      @relation(fields: [taskId], references: [id])
+  user            User                       @relation(fields: [userId], references: [id])
+  submissionEntry TimesheetSubmissionEntry[]
+  voiceEntries    VoiceEntry[]
+
+  @@map("time_entries")
+}
+
+model TimesheetSubmission {
+  id              String                     @id @default(cuid())
+  userId          String
+  weekStartDate   DateTime                   @db.Date
+  weekEndDate     DateTime                   @db.Date
+  totalHours        Float
+  totalBillable     Float
+  totalBillableAmount Float                   @default(0) // Add missing field for API compatibility
+  status            SubmissionStatus         @default(PENDING)
+  submittedAt       DateTime                 @default(now())
+  approvedAt        DateTime?
+  approvedBy        String?
+  rejectedAt        DateTime?
+  rejectionReason   String?
+  
+  // Xero sync fields
+  lastSyncedToXero  DateTime?
+  xeroInvoiceId     String?
+  xeroSyncStatus    String?                 @default("NOT_SYNCED") // NOT_SYNCED, SYNCING, SYNCED, FAILED
+  entries         TimesheetSubmissionEntry[]
+  approver        User?                      @relation("ApprovalRelation", fields: [approvedBy], references: [id])
+  user            User                       @relation(fields: [userId], references: [id])
+
+  @@unique([userId, weekStartDate])
+  @@map("timesheet_submissions")
+}
+
+model TimesheetSubmissionEntry {
+  id           String              @id @default(cuid())
+  submissionId String
+  timeEntryId  String
+  submission   TimesheetSubmission @relation(fields: [submissionId], references: [id])
+  timeEntry    TimeEntry           @relation(fields: [timeEntryId], references: [id])
+
+  @@unique([submissionId, timeEntryId])
+  @@map("timesheet_submission_entries")
+}
+
+model Approval {
+  id           String         @id @default(cuid())
+  submissionId String
+  approverId   String
+  status       ApprovalStatus
+  comments     String?
+  approvedAt   DateTime?
+  approver     User           @relation(fields: [approverId], references: [id])
+
+  @@map("approvals")
+}
+
+model AIInsight {
+  id          String      @id @default(cuid())
+  userId      String
+  type        InsightType
+  title       String
+  description String
+  confidence  Float
+  actionable  Boolean     @default(true)
+  dismissed   Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+
+  @@map("ai_insights")
+}
+
+model AIPreference {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  enableSuggestions    Boolean  @default(true)
+  enableAutoCategory   Boolean  @default(true)
+  enableTimeEstimation Boolean  @default(true)
+  enableInsights       Boolean  @default(true)
+  enableSmartReminders Boolean  @default(true)
+  enableVoiceEntry     Boolean  @default(false)
+  preferredCategories  String[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("ai_preferences")
+}
+
+model TimePattern {
+  id          String      @id @default(cuid())
+  userId      String
+  patternType PatternType
+  projectId   String?
+  taskId      String?
+  dayOfWeek   Int?
+  timeOfDay   String?
+  duration    Float?
+  frequency   Int         @default(1)
+  confidence  Float       @default(0.5)
+  lastUsed    DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  project     Project?    @relation(fields: [projectId], references: [id])
+  task        Task?       @relation(fields: [taskId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@map("time_patterns")
+}
+
+model AIPrediction {
+  id              String         @id @default(cuid())
+  entityType      EntityType
+  entityId        String
+  predictionType  PredictionType
+  predictionValue Json
+  confidence      Float
+  horizon         String
+  createdAt       DateTime       @default(now())
+  expiresAt       DateTime?
+  actualValue     Json?
+  accuracy        Float?
+
+  @@map("ai_predictions")
+}
+
+model Portfolio {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  status      PortfolioStatus @default(ACTIVE)
+  budget      Float?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  owner       User            @relation(fields: [ownerId], references: [id])
+  programs    Program[]
+  projects    Project[]
+
+  @@map("portfolios")
+}
+
+model Program {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  portfolioId String
+  managerId   String
+  status      ProgramStatus @default(ACTIVE)
+  budget      Float?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  manager     User          @relation(fields: [managerId], references: [id])
+  portfolio   Portfolio     @relation(fields: [portfolioId], references: [id])
+  projects    Project[]
+
+  @@map("programs")
+}
+
+model VoiceEntry {
+  id            String     @id @default(cuid())
+  userId        String
+  audioUrl      String?
+  transcription String?
+  parsed        Boolean    @default(false)
+  timeEntryId   String?
+  confidence    Float?
+  createdAt     DateTime   @default(now())
+  timeEntry     TimeEntry? @relation(fields: [timeEntryId], references: [id])
+  user          User       @relation(fields: [userId], references: [id])
+
+  @@map("voice_entries")
+}
+
+model TimeTemplate {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  description     String?
+  projectId       String
+  taskId          String?
+  defaultDuration Float?
+  billable        Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  usageCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  project         Project  @relation(fields: [projectId], references: [id])
+  task            Task?    @relation(fields: [taskId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@map("time_templates")
+}
+
+model Report {
+  id             String            @id @default(cuid())
+  name           String
+  description    String?
+  userId         String
+  type           ReportType
+  parameters     Json
+  isPublic       Boolean           @default(false)
+  isScheduled    Boolean           @default(false)
+  scheduleConfig Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  executions     ReportExecution[]
+  user           User              @relation(fields: [userId], references: [id])
+
+  @@map("reports")
+}
+
+model ReportExecution {
+  id           String          @id @default(cuid())
+  reportId     String
+  executedBy   String
+  status       ExecutionStatus
+  result       Json?
+  errorMessage String?
+  executedAt   DateTime        @default(now())
+  completedAt  DateTime?
+  user         User            @relation(fields: [executedBy], references: [id])
+  report       Report          @relation(fields: [reportId], references: [id])
+
+  @@map("report_executions")
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  category    String?
+  isPublic    Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model notification_preferences {
+  id                                  String   @id
+  userId                              String   @unique
+  emailDigestEnabled                  Boolean  @default(true)
+  emailDigestTime                     String   @default("09:00")
+  slackNotificationsEnabled           Boolean  @default(false)
+  slackWebhookUrl                     String?
+  approvalRemindersEnabled            Boolean  @default(true)
+  escalationNotificationsEnabled      Boolean  @default(true)
+  timesheetStatusNotificationsEnabled Boolean  @default(true)
+  createdAt                           DateTime @default(now())
+  updatedAt                           DateTime
+  users                               User     @relation(fields: [userId], references: [id])
+}
+
+model notification_queue {
+  id           String               @id
+  type         NotificationType
+  recipientId  String
+  payload      Json
+  priority     NotificationPriority @default(NORMAL)
+  scheduledFor DateTime
+  attempts     Int                  @default(0)
+  maxAttempts  Int                  @default(3)
+  status       QueueStatus          @default(PENDING)
+  error        String?
+  processedAt  DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime
+
+  @@index([status, scheduledFor])
+}
+
+model notifications {
+  id           String               @id
+  userId       String
+  type         NotificationType
+  title        String
+  message      String
+  entityType   String?
+  entityId     String?
+  priority     NotificationPriority @default(NORMAL)
+  status       NotificationStatus   @default(UNREAD)
+  scheduledFor DateTime?
+  sentAt       DateTime?
+  readAt       DateTime?
+  metadata     Json?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime
+  users        User                 @relation(fields: [userId], references: [id])
+
+  @@index([scheduledFor])
+  @@index([userId, status])
+}
+
+// ============================================================================
+// RESOURCE & CAPACITY MANAGEMENT MODELS
+// ============================================================================
+
+model ResourceOwner {
+  id         String   @id @default(cuid())
+  name       String
+  email      String?  @unique
+  department String?
+  role       String?
+  phone      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Relations
+  resources  Resource[]
+  
+  @@map("resource_owners")
+}
+
+model Resource {
+  id                           String          @id @default(cuid())
+  name                         String
+  function                     String
+  company                      String
+  employmentType               EmploymentType
+  region                       String
+  country                      String
+  skills                       String[]        @default([])
+  email                        String?
+  phone                        String?
+  avatar                       String?
+  annualSalary                 Float?
+  workingDaysPerWeek           Int             @default(5)
+  bauAllocationPercentage      Int             @default(60)
+  projectAllocationPercentage  Int             @default(40)
+  resourceOwnerId              String?
+  createdAt                    DateTime        @default(now())
+  updatedAt                    DateTime        @updatedAt
+  
+  // Relations
+  resourceOwner                ResourceOwner?                @relation(fields: [resourceOwnerId], references: [id])
+  resourceAllocations          ResourceAllocation[]
+  capacityAllocations          CapacityAllocation[]
+  projectResourceAllocations   ProjectResourceAllocation[]
+  
+  @@map("resources")
+}
+
+model Sponsor {
+  id         String      @id @default(cuid())
+  name       String
+  role       String
+  department String
+  email      String
+  phone      String?
+  type       SponsorType
+  createdAt  DateTime    @default(now())
+  
+  // Relations
+  projectsAsItSponsor       Project[]                 @relation("ITSponsorRelation")
+  projectBusinessSponsors   ProjectBusinessSponsor[]
+  
+  @@map("sponsors")
+}
+
+model ProjectBusinessSponsor {
+  id        String  @id @default(cuid())
+  projectId String
+  sponsorId String
+  
+  // Relations  
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sponsor   Sponsor @relation(fields: [sponsorId], references: [id], onDelete: Cascade)
+  
+  @@unique([projectId, sponsorId])
+  @@map("project_business_sponsors")
+}
+
+model ResourceAllocation {
+  id                   String   @id @default(cuid())
+  resourceId           String
+  projectId            String
+  allocationPercentage Float    // 0-100 percentage
+  startDate            DateTime @db.Date
+  endDate              DateTime @db.Date
+  role                 String
+  billableRate         Float?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  // Relations
+  resource             Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@map("resource_allocations")
+}
+
+model CapacityAllocation {
+  id              String         @id @default(cuid())
+  resourceId      String
+  projectId       String?
+  weekStartDate   DateTime       @db.Date
+  allocation      Float          // Hours per week (0-8 per day * 5 days = 0-40 hours)
+  type            AllocationType @default(ACTUAL)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  // Relations
+  resource        Resource       @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  project         Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  
+  @@map("capacity_allocations")
+}
+
+model ProjectResourceAllocation {
+  id             String              @id @default(cuid())
+  projectId      String
+  resourceId     String
+  resourceType   String
+  weekStartDate  DateTime            @db.Date
+  allocationDays Float               // 0-5 days per week
+  scenario       AllocationScenario  @default(MOST_LIKELY)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  
+  // Relations
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  resource       Resource            @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  
+  @@unique([projectId, resourceId, weekStartDate, scenario])
+  @@map("project_resource_allocations")
+}
+
+model QuarterlyRock {
+  id          String   @id @default(cuid())
+  quarter     String   // Q1-2024, Q2-2024, etc.
+  year        Int
+  title       String
+  description String?
+  ownerId     String?
+  status      String   @default("PLANNING") // PLANNING, ACTIVE, COMPLETED, CANCELLED
+  progress    Float    @default(0)          // 0-100 percentage
+  priority    PriorityLevel @default(MEDIUM)
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("quarterly_rocks")
+}
+
+model CapacityManagementCalendar {
+  id                      String                @id @default(cuid())
+  dayZero                 DateTime              @db.Date
+  forecastingPeriodMonths Int                   @default(3)
+  reviewFrequency         ReviewFrequency       @default(MONTHLY)
+  governanceMeetingDay    GovernanceMeetingDay  @default(FRIDAY)
+  governanceMeetingTime   String                @default("09:00:00")
+  submissionDeadlineDays  Int                   @default(2)
+  nextGovernanceMeeting   DateTime?             @db.Date
+  nextSubmissionDeadline  DateTime?             @db.Date
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  
+  @@map("capacity_management_calendar")
+}
+
+model CompanySettings {
+  id                         String        @id @default(cuid())
+  companyName                String        @default("Your Company")
+  logoUrl                    String?
+  primaryColor               String        @default("#1e40af")
+  secondaryColor             String        @default("#64748b")
+  accentColor                String        @default("#f97316")
+  workingDaysPerWeek         Int           @default(5)
+  workingHoursPerDay         Int           @default(8)
+  managementOverheadMultiplier Float       @default(1.4)
+  currency                   String        @default("USD")
+  dateFormat                 String        @default("MM/DD/YYYY")
+  timeZone                   String        @default("UTC")
+  fiscalYearStart            String        @default("01-01")
+  defaultRole                UserRole      @default(EMPLOYEE)
+  maturityLevel              MaturityLevel @default(GROWING)
+  labelsConfig               Json          @default("{\"resources\": \"Resources\", \"projects\": \"Projects\", \"portfolios\": \"Portfolios\", \"capacity\": \"Capacity\", \"utilization\": \"Utilization\", \"allocation\": \"Allocation\"}")
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+  
+  @@map("company_settings")
+}
+
+// Bug Reporting System
+model BugReport {
+  id                 String       @id @default(cuid())
+  userId             String
+  title              String
+  module             String
+  bugType            String
+  severity           BugSeverity
+  status             BugStatus    @default(PENDING)
+  description        String       @db.Text
+  stepsToReproduce   String?      @db.Text
+  expectedBehavior   String?      @db.Text
+  actualBehavior     String?      @db.Text
+  browserInfo        String?
+  additionalInfo     String?      @db.Text
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  
+  // Relations
+  user               User         @relation(fields: [userId], references: [id])
+  comments           BugComment[]
+  
+  @@map("bug_reports")
+}
+
+model BugComment {
+  id        String    @id @default(cuid())
+  bugId     String
+  userId    String
+  comment   String    @db.Text
+  createdAt DateTime  @default(now())
+  
+  // Relations
+  bug       BugReport @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+  
+  @@map("bug_comments")
+}
+
+// Feature Request System
+model FeatureRequest {
+  id                 String               @id @default(cuid())
+  userId             String
+  title              String
+  module             String
+  priority           FeaturePriority
+  status             FeatureRequestStatus @default(UNDER_REVIEW)
+  userType           String
+  problemStatement   String               @db.Text
+  proposedSolution   String               @db.Text
+  businessValue      String               @db.Text
+  userStories        String?              @db.Text
+  acceptanceCriteria String?              @db.Text
+  effortEstimate     EffortEstimate?
+  additionalNotes    String?              @db.Text
+  votes              Int                  @default(0)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  // Relations
+  user               User                 @relation(fields: [userId], references: [id])
+  comments           FeatureComment[]
+  votes_relation     FeatureVote[]
+  
+  @@map("feature_requests")
+}
+
+model FeatureComment {
+  id        String         @id @default(cuid())
+  featureId String
+  userId    String
+  comment   String         @db.Text
+  createdAt DateTime       @default(now())
+  
+  // Relations
+  feature   FeatureRequest @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id])
+  
+  @@map("feature_comments")
+}
+
+model FeatureVote {
+  id        String         @id @default(cuid())
+  featureId String
+  userId    String
+  createdAt DateTime       @default(now())
+  
+  // Relations
+  feature   FeatureRequest @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id])
+  
+  @@unique([featureId, userId])
+  @@map("feature_votes")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+  PARTNER
+  PRINCIPAL
+  PRACTICE_LEAD
+  SENIOR_CONSULTANT
+  JUNIOR_CONSULTANT
+  CONTRACTOR
+  CLIENT_USER
+}
+
+// Resource Management Enums
+enum EmploymentType {
+  STAFF
+  CONTRACTOR
+  AGENCY
+  PROJECT_SERVICES
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+  PAUSED
+}
+
+enum PriorityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum SponsorType {
+  IT
+  BUSINESS
+}
+
+enum AllocationType {
+  ACTUAL
+  FORECAST
+}
+
+enum ReviewFrequency {
+  WEEKLY
+  BI_WEEKLY
+  MONTHLY
+  QUARTERLY
+}
+
+enum GovernanceMeetingDay {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+}
+
+enum MaturityLevel {
+  STARTUP
+  GROWING
+  ESTABLISHED
+  MATURE
+  ENTERPRISE
+}
+
+enum AllocationScenario {
+  OPTIMISTIC
+  MOST_LIKELY
+  PESSIMISTIC
+}
+
+enum BugSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum BugStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum FeatureRequestStatus {
+  UNDER_REVIEW
+  IN_BACKLOG
+  IN_DEVELOPMENT
+  COMPLETED
+  REJECTED
+}
+
+enum FeaturePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum EffortEstimate {
+  SMALL
+  MEDIUM
+  LARGE
+  UNKNOWN
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+}
+
+enum TimeEntryStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum InsightType {
+  PRODUCTIVITY_PATTERN
+  TIME_OPTIMIZATION
+  PROJECT_SUGGESTION
+  BILLING_ANOMALY
+  DUPLICATE_DETECTION
+  WORKLOAD_BALANCE
+  BURNOUT_WARNING
+  EFFICIENCY_TREND
+}
+
+enum PatternType {
+  DAILY_ROUTINE
+  WEEKLY_PATTERN
+  PROJECT_HABIT
+  TASK_FREQUENCY
+  SEASONAL_TREND
+}
+
+enum EntityType {
+  USER
+  PROJECT
+  TASK
+  TEAM
+  CLIENT
+  PORTFOLIO
+}
+
+enum PredictionType {
+  PROJECT_COMPLETION
+  BUDGET_VARIANCE
+  RESOURCE_UTILIZATION
+  TASK_DURATION
+  TEAM_PRODUCTIVITY
+  WORKLOAD_BALANCE
+  BILLING_FORECAST
+}
+
+enum PortfolioStatus {
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+enum ProgramStatus {
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+enum ReportType {
+  TIME_ANALYSIS
+  PROJECT_ANALYTICS
+  RESOURCE_UTILIZATION
+  FINANCIAL_SUMMARY
+  PRODUCTIVITY_REPORT
+  CUSTOM_DASHBOARD
+}
+
+enum ExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  DISMISSED
+}
+
+enum NotificationType {
+  EMAIL_DIGEST
+  APPROVAL_REMINDER
+  ESCALATION_ALERT
+  TIMESHEET_STATUS_UPDATE
+  SLACK_NOTIFICATION
+  URGENT_APPROVAL
+  SYSTEM_ALERT
+}
+
+enum QueueStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  RETRYING
+}
+
+model XeroConnection {
+  id           String   @id @default("default")
+  accessToken  String   @default("")
+  refreshToken String   @default("")
+  idToken      String   @default("")
+  expiresAt    DateTime @default(now())
+  tenantId     String   @default("")
+  scopes       String   @default("")
+  connected    Boolean  @default(false)
+  isActive     Boolean  @default(false)
+  lastSync     DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@map("xero_connections")
+}
+
+model XeroSyncLog {
+  id           String            @id @default(cuid())
+  submissionId String?
+  userId       String?           // User who initiated the operation
+  operation    XeroSyncOperation
+  status       XeroSyncStatus
+  entityType   String?           // Type of entity being processed
+  entityId     String?           // ID of the entity being processed
+  details      String?           // JSON string with sync results
+  error        String?
+  jobId        String?
+  trigger      XeroSyncTrigger   @default(manual)
+  metadata     String?           // JSON string with additional data
+  timestamp    DateTime          @default(now())
+  startedAt    DateTime          @default(now())
+  completedAt  DateTime?
+  duration     Int?              // Duration in milliseconds
+  retryCount   Int               @default(0)
+  createdAt    DateTime          @default(now())
+
+  @@index([submissionId])
+  @@index([operation, status])
+  @@index([createdAt])
+  @@map("xero_sync_logs")
+}
+
+enum XeroSyncOperation {
+  SYNC_TIMESHEET
+  BATCH_SYNC
+  HEALTH_CHECK
+  CONNECTION_TEST
+  MANUAL_SYNC
+  MANUAL_SYNC_DRY_RUN
+  VALIDATION_OVERRIDE_CREATED
+  VALIDATION_OVERRIDE_APPROVED
+  VALIDATION_OVERRIDE_REJECTED
+  VALIDATION_OVERRIDE_REVOKED
+  VALIDATION_OVERRIDE_EXTENDED
+}
+
+enum XeroSyncStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  RETRYING
+}
+
+enum XeroSyncTrigger {
+  approval
+  manual
+  scheduled
+  retry
+}
+
+model XeroQuarantineRecord {
+  id               String   @id @default(cuid())
+  entityType       String   // 'timeEntry', 'project', 'contact', 'submission'
+  entityId         String
+  originalData     String   @db.Text  // JSON string of original data
+  transformedData  String?  @db.Text  // JSON string of transformed data
+  correctedData    String?  @db.Text  // JSON string of corrected data after review
+  reason           String   // QuarantineReason enum values
+  status           String   // QuarantineStatus enum values
+  errors           String   @db.Text  // JSON string of ValidationError array
+  priority         String   // ErrorSeverity enum values
+  quarantinedAt    DateTime @default(now())
+  quarantinedBy    String
+  reviewedAt       DateTime?
+  reviewedBy       String?
+  resolutionNotes  String?
+  metadata         String?  @db.Text  // JSON string for additional metadata
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([status, priority])
+  @@index([quarantinedAt])
+  @@index([reviewedBy])
+  @@map("xero_quarantine_records")
+}
+
+model XeroValidationLog {
+  id                String   @id @default(cuid())
+  entityType        String
+  entityId          String
+  validationResult  String   @db.Text  // JSON string of ValidationResult
+  checksum          String?
+  validatedAt       DateTime @default(now())
+  validatedBy       String   @default("system")
+  passed            Boolean
+  errorCount        Int      @default(0)
+  warningCount      Int      @default(0)
+  
+  @@index([entityType, entityId])
+  @@index([validatedAt])
+  @@index([passed])
+  @@map("xero_validation_logs")
+}
+
+model XeroErrorEscalation {
+  id                   String   @id @default(cuid())
+  quarantineRecordId   String?
+  syncLogId            String?
+  errorSeverity        String   // ErrorSeverity enum values
+  errorCategory        String   // ErrorCategory enum values
+  escalatedTo          String   // User ID of person escalated to
+  escalatedBy          String   @default("system")
+  escalatedAt          DateTime @default(now())
+  acknowledgedAt       DateTime?
+  acknowledgedBy       String?
+  resolvedAt           DateTime?
+  resolvedBy           String?
+  escalationNotes      String?
+  resolutionNotes      String?
+  status               String   @default("PENDING") // PENDING, ACKNOWLEDGED, RESOLVED
+  
+  @@index([escalatedTo, status])
+  @@index([escalatedAt])
+  @@map("xero_error_escalations")
+}
+
+model XeroValidationOverride {
+  id                String   @id @default(cuid())
+  entityType        String   // 'timeEntry', 'project', 'contact', 'submission'
+  entityId          String   // ID of the entity being overridden
+  overriddenRules   String[] // Array of validation rules being overridden
+  justification     String   @db.Text // Detailed justification for the override
+  overrideType      String   @default("TEMPORARY") // TEMPORARY, PERMANENT
+  status            String   @default("ACTIVE") // ACTIVE, PENDING_APPROVAL, REJECTED, REVOKED, EXPIRED
+  
+  // Timestamps and expiry
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  expiresAt         DateTime? // Null for permanent overrides
+  
+  // Approval workflow
+  createdById       String
+  approvedById      String?
+  approvedAt        DateTime?
+  approvalComments  String?
+  
+  // Revocation details
+  revokedAt         DateTime?
+  revokedById       String?
+  revocationReason  String?
+  
+  // Extension tracking
+  extendedAt        DateTime?
+  extendedById      String?
+  extensionReason   String?
+  
+  // Additional metadata
+  metadata          String?  @db.Text // JSON string for additional metadata
+  
+  // Relationships
+  createdBy         User     @relation("ValidationOverrideCreatedBy", fields: [createdById], references: [id])
+  approvedBy        User?    @relation("ValidationOverrideApprovedBy", fields: [approvedById], references: [id])
+  revokedBy         User?    @relation("ValidationOverrideRevokedBy", fields: [revokedById], references: [id])
+  extendedBy        User?    @relation("ValidationOverrideExtendedBy", fields: [extendedById], references: [id])
+  
+  @@index([entityType, entityId])
+  @@index([status])
+  @@index([createdById])
+  @@index([overrideType])
+  @@index([expiresAt])
+  @@map("xero_validation_overrides")
+}
+
+// Add this to the main schema.prisma file - Performance Metrics Models for Phase 2B-8a
+
+model PerformanceMetric {
+  id            String              @id @default(cuid())
+  metricType    MetricType
+  entityType    String?             // 'sync', 'validation', 'api', 'database', 'queue'
+  entityId      String?             // Related entity ID if applicable
+  name          String              // Metric name (e.g., 'sync_duration', 'api_response_time')
+  value         Float               // Metric value
+  unit          String              // Unit of measurement (ms, count, percentage, bytes)
+  tags          Json?               // Additional tags/labels for filtering
+  timestamp     DateTime            @default(now())
+  source        String              @default("system") // Source of the metric
+  
+  // Performance context
+  executionId   String?             // Links related metrics in a single operation
+  userId        String?             // User context if applicable
+  sessionId     String?             // Session context if applicable
+  
+  // Aggregation support
+  timeWindow    String?             // For pre-aggregated metrics (1m, 5m, 1h, 1d)
+  aggregationType String?           // avg, sum, min, max, count
+  
+  createdAt     DateTime            @default(now())
+  
+  @@index([metricType, timestamp])
+  @@index([entityType, entityId])
+  @@index([name, timestamp])
+  @@index([executionId])
+  @@index([timeWindow, aggregationType])
+  @@map("performance_metrics")
+}
+
+model SystemHealthCheck {
+  id              String            @id @default(cuid())
+  checkType       HealthCheckType
+  component       String            // 'database', 'xero_api', 'redis', 'filesystem'
+  status          HealthStatus
+  responseTime    Float?            // Response time in milliseconds
+  details         Json?             // Detailed health information
+  error           String?           // Error message if check failed
+  timestamp       DateTime          @default(now())
+  
+  // Thresholds and SLA tracking
+  expectedMax     Float?            // Expected max response time
+  slaBreached     Boolean           @default(false)
+  
+  createdAt       DateTime          @default(now())
+  
+  @@index([component, timestamp])
+  @@index([status, timestamp])
+  @@index([slaBreached])
+  @@map("system_health_checks")
+}
+
+model PipelineMetrics {
+  id                String            @id @default(cuid())
+  pipelineType      PipelineType      // SYNC, VALIDATION, PROCESSING, REPORTING
+  executionId       String            // Unique execution identifier
+  
+  // Timing metrics
+  startedAt         DateTime          @default(now())
+  completedAt       DateTime?
+  totalDuration     Float?            // Total duration in milliseconds
+  
+  // Throughput metrics
+  itemsProcessed    Int               @default(0)
+  itemsSuccessful   Int               @default(0)
+  itemsFailed       Int               @default(0)
+  itemsSkipped      Int               @default(0)
+  
+  // Resource utilization
+  memoryUsage       Float?            // Peak memory usage in MB
+  cpuUsage          Float?            // Peak CPU usage percentage
+  dbQueries         Int               @default(0)
+  apiCalls          Int               @default(0)
+  
+  // Quality metrics
+  errorRate         Float             @default(0) // Percentage
+  successRate       Float             @default(100) // Percentage
+  
+  // Context
+  triggeredBy       String?           // User ID or system component
+  triggerType       TriggerType       // MANUAL, SCHEDULED, AUTOMATIC, EVENT_DRIVEN
+  batchSize         Int?              // Size of batch being processed
+  
+  // Status and metadata
+  status            PipelineStatus    @default(RUNNING)
+  metadata          Json?             // Additional pipeline-specific data
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  @@index([pipelineType, startedAt])
+  @@index([status])
+  @@index([executionId])
+  @@index([triggeredBy])
+  @@map("pipeline_metrics")
+}
+
+model AlertRule {
+  id              String            @id @default(cuid())
+  name            String
+  description     String?
+  
+  // Rule definition
+  metricType      String            // What metric to monitor
+  condition       AlertCondition    // GREATER_THAN, LESS_THAN, EQUALS, etc.
+  threshold       Float             // Threshold value
+  timeWindow      Int               // Time window in minutes
+  
+  // Alert behavior
+  severity        AlertSeverity     @default(MEDIUM)
+  isActive        Boolean           @default(true)
+  suppressDuration Int              @default(60) // Minutes to suppress duplicate alerts
+  
+  // Notification settings
+  notificationChannels Json          // Array of notification channels
+  escalationRules Json?             // Escalation configuration
+  
+  // Tracking
+  lastTriggered   DateTime?
+  triggerCount    Int               @default(0)
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  createdById     String
+  createdBy       User              @relation(fields: [createdById], references: [id])
+  
+  alerts          Alert[]
+  
+  @@index([isActive])
+  @@index([metricType])
+  @@map("alert_rules")
+}
+
+model Alert {
+  id              String            @id @default(cuid())
+  ruleId          String
+  rule            AlertRule         @relation(fields: [ruleId], references: [id])
+  
+  // Alert details
+  severity        AlertSeverity
+  status          AlertStatus       @default(OPEN)
+  title           String
+  message         String            @db.Text
+  
+  // Context
+  metricValue     Float?            // Value that triggered the alert
+  threshold       Float?            // Threshold that was breached
+  affectedEntity  String?           // Entity that was affected
+  
+  // Resolution tracking
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  resolutionNotes String?
+  
+  // Notification tracking
+  notificationsSent Json?           // Track which notifications were sent
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  @@index([ruleId, status])
+  @@index([severity, status])
+  @@index([createdAt])
+  @@map("alerts")
+}
+
+// Enums for metrics system
+enum MetricType {
+  COUNTER
+  GAUGE  
+  HISTOGRAM
+  TIMER
+}
+
+enum HealthCheckType {
+  AVAILABILITY
+  PERFORMANCE
+  FUNCTIONAL
+  INTEGRATION
+}
+
+enum HealthStatus {
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+  UNKNOWN
+}
+
+enum PipelineType {
+  SYNC
+  VALIDATION
+  PROCESSING
+  REPORTING
+  BULK_OPERATION
+}
+
+enum PipelineStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+  TIMEOUT
+}
+
+enum TriggerType {
+  MANUAL
+  SCHEDULED
+  AUTOMATIC
+  EVENT_DRIVEN
+}
+
+enum AlertCondition {
+  GREATER_THAN
+  LESS_THAN
+  EQUALS
+  NOT_EQUALS
+  GREATER_THAN_OR_EQUALS
+  LESS_THAN_OR_EQUALS
+  CONTAINS
+  MATCHES_PATTERN
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  SUPPRESSED
+}

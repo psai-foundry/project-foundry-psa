@@ -1,0 +1,90 @@
+
+name: Database Schema Review
+
+on:
+  pull_request:
+    paths:
+      - 'app/prisma/schema.prisma'
+      - 'app/prisma/migrations/**'
+
+jobs:
+  schema-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'yarn'
+          cache-dependency-path: 'app/yarn.lock'
+      
+      - name: Install dependencies
+        working-directory: ./app
+        run: yarn install --frozen-lockfile
+      
+      - name: Validate Prisma Schema
+        working-directory: ./app
+        run: |
+          yarn prisma validate
+          yarn prisma format --check
+      
+      - name: Generate Schema Diff
+        run: |
+          echo "## 📊 Database Schema Changes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -q "app/prisma/schema.prisma"; then
+            echo "### ⚠️ Schema Modifications Detected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Modified Files:**" >> $GITHUB_STEP_SUMMARY
+            git diff --name-only origin/${{ github.base_ref }}..HEAD | grep "app/prisma/" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            echo "**Schema Changes:**" >> $GITHUB_STEP_SUMMARY
+            echo '```diff' >> $GITHUB_STEP_SUMMARY
+            git diff origin/${{ github.base_ref }}..HEAD -- app/prisma/schema.prisma >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            echo "### 🔍 Review Checklist for CTO" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Schema changes are backward compatible" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Migration strategy is safe for production" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Rollback plan is documented" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Performance impact assessed" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Data integrity maintained" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] Indexes and constraints reviewed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No schema changes detected in this PR" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Check Migration Files
+        run: |
+          if git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -q "app/prisma/migrations/"; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📋 Migration Files" >> $GITHUB_STEP_SUMMARY
+            echo "**New/Modified Migrations:**" >> $GITHUB_STEP_SUMMARY
+            git diff --name-only origin/${{ github.base_ref }}..HEAD | grep "app/prisma/migrations/" | while read file; do
+              echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**⚠️ Database Migration Required Before Deployment**" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync(process.env.GITHUB_STEP_SUMMARY, 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🔍 **CTO Review Required - Database Changes Detected**\n\n${summary}\n\n---\n*This PR contains database schema changes and requires CTO approval before merging.*`
+            });

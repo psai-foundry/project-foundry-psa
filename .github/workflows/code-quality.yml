@@ -1,0 +1,66 @@
+
+name: Code Quality & Database Schema Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'yarn'
+          cache-dependency-path: 'app/yarn.lock'
+      
+      - name: Install dependencies
+        working-directory: ./app
+        run: yarn install --frozen-lockfile
+      
+      - name: TypeScript Check
+        working-directory: ./app
+        run: yarn tsc --noEmit
+      
+      - name: Lint Check
+        working-directory: ./app
+        run: yarn lint
+      
+      - name: Prisma Schema Validation
+        working-directory: ./app
+        run: |
+          yarn prisma validate
+          yarn prisma format --check
+
+  database-schema-review:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[schema]') || github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Database Schema Changes Detection
+        run: |
+          echo "## Database Schema Changes" >> $GITHUB_STEP_SUMMARY
+          if git diff --name-only HEAD~1..HEAD | grep -q "app/prisma/schema.prisma"; then
+            echo "⚠️ **Prisma Schema Modified**" >> $GITHUB_STEP_SUMMARY
+            echo "```diff" >> $GITHUB_STEP_SUMMARY
+            git diff HEAD~1..HEAD -- app/prisma/schema.prisma >> $GITHUB_STEP_SUMMARY
+            echo "```" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No database schema changes detected" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Migration Files Check
+        run: |
+          if git diff --name-only HEAD~1..HEAD | grep -q "app/prisma/migrations/"; then
+            echo "📋 **Migration Files Added/Modified**" >> $GITHUB_STEP_SUMMARY
+            git diff --name-only HEAD~1..HEAD | grep "app/prisma/migrations/" >> $GITHUB_STEP_SUMMARY
+          fi

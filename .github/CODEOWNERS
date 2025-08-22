@@ -1,0 +1,24 @@
+
+# Code Owners for Project Foundry PSA
+
+# Global ownership - CTO review required for all changes
+* @your-username
+
+# Database schema and migrations require special attention
+app/prisma/ @your-username
+scripts/ @your-username
+
+# Critical application components
+app/components/ @your-username
+app/pages/api/ @your-username
+app/lib/ @your-username
+
+# Configuration files
+*.env* @your-username
+*.json @your-username
+*.yml @your-username
+*.yaml @your-username
+
+# Documentation and specifications
+*.md @your-username
+*.pdf @your-username
